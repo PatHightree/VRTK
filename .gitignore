@@ -58,3 +58,5 @@ sysinfo.txt
 .DS_Store
 *.swp
 StyleCop*
+
+Logs/
