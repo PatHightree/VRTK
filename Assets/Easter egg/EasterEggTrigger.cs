@@ -19,12 +19,12 @@ public class EasterEggTrigger : MonoBehaviour
         m_PrevMaterials = new Dictionary<Renderer, Material>();
         m_controllerEvents = new List<VRTK_ControllerEvents>();
         GameObject test = VRTK_SDK_Bridge.GetControllerLeftHand(true);
-        m_controllerEvents.Add(VRTK_SDK_Bridge.GetControllerLeftHand(true).GetComponentInChildren<VRTK_ControllerEvents>());
-        m_controllerEvents.Add(VRTK_SDK_Bridge.GetControllerRightHand(true).GetComponentInChildren<VRTK_ControllerEvents>());
+        m_controllerEvents.Add(VRTK_SDK_Bridge.GetControllerLeftHand(true)?.GetComponentInChildren<VRTK_ControllerEvents>());
+        m_controllerEvents.Add(VRTK_SDK_Bridge.GetControllerRightHand(true)?.GetComponentInChildren<VRTK_ControllerEvents>());
 
-        m_controllerEvents.ForEach(ce => ce.TouchpadPressed += OnTouchpadPressed);
-        m_controllerEvents.ForEach(ce => ce.TouchpadReleased += OnTouchpadReleased);
-        m_controllerEvents.ForEach(ce => ce.TouchpadAxisChanged += OnTouchpadAxisChanged);
+        m_controllerEvents?.ForEach(ce => ce.TouchpadPressed += OnTouchpadPressed);
+        m_controllerEvents?.ForEach(ce => ce.TouchpadReleased += OnTouchpadReleased);
+        m_controllerEvents?.ForEach(ce => ce.TouchpadAxisChanged += OnTouchpadAxisChanged);
     }
 
     private void OnTouchpadPressed(object sender, ControllerInteractionEventArgs e)
