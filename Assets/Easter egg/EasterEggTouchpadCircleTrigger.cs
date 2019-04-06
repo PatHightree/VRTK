@@ -2,7 +2,7 @@
 using UnityEngine;
 using VRTK;
 
-public class EasterEggTrigger : MonoBehaviour
+public class EasterEggTouchpadCircleTrigger : MonoBehaviour
 {
     public List<GameObject> Targets;
     public Material Effect;
