@@ -60,3 +60,7 @@ sysinfo.txt
 StyleCop*
 
 Logs/
+
+.idea/
+
+SteamVR\.Plugin\.1\.2\.3\.unitypackage
