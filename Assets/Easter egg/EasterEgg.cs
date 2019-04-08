@@ -7,11 +7,20 @@ using VRTK;
 public class EasterEgg : MonoBehaviour
 {
     public Transform Target;
-    public Shader EffectBlend;
+    public float FadeDuration = 2;
+    [Header("Visuals")] 
+    [Range(0, 1)]public float EffectIntensity;
+    public Shader EffectShader;
     public Material EffectParameters;
-    public float EffectMax = 1;
-    public float BlendDuration = 2;
-    public AudioClip HapticClip;
+
+    [Header("Haptics")]
+    [Range(0, 1)] public float HapticsIntensity = 1;
+    [Range(0, 1)] public float OscillationResult;
+    [Range(0, 1)] public float OscillateMinStrength = 0.07f;
+    [Range(0, 1)] public float OscillateMaxStrength = 0.25f;
+    [Range(0, 1)] public float OscillatePeriod = 0.5f;
+    [Range(0, 1)] public float UpdateInterval = 0.05f;
+    [Range(0.00001f, 0.1f)] public float PulseInterval = 0.01f;
 
     private bool m_active;
     private List<Renderer> m_renderers;
@@ -23,6 +32,7 @@ public class EasterEgg : MonoBehaviour
     private const int ClickThreshold = 3;
     private const float ClickMaxDuration = 0.5f;
     private const float UpsideDownThreshold = 90;
+    private Coroutine m_effectRoutine;
     private static readonly int Blend = Shader.PropertyToID("_EffectBlend");
     private static readonly int NumberSteps = Shader.PropertyToID("_NumberSteps");
     private static readonly int TotalDepth = Shader.PropertyToID("_TotalDepth");
@@ -44,7 +54,7 @@ public class EasterEgg : MonoBehaviour
         {
             _r.materials.ToList().ForEach(_m =>
             {
-                _m.shader = EffectBlend;
+                _m.shader = EffectShader;
                 _m.SetFloat(Blend, 0);
                 _m.SetFloat(NumberSteps, EffectParameters.GetFloat(NumberSteps));
                 _m.SetFloat(TotalDepth, EffectParameters.GetFloat(TotalDepth));
@@ -74,14 +84,14 @@ public class EasterEgg : MonoBehaviour
     {
         // If player re-grabs while effect is active, start haptics immediately
         if (m_active);
-            StartCoroutine(LoopHapticEffect(0));
+            HapticsIntensity = 1;
     }
 
     private void Ungrabbed(object _sender, InteractableObjectEventArgs _e)
     {
         // If player lets go of the controller while effect is active, cancel haptics immediately
         if (!m_active)
-            StartCoroutine(CancelHapticEffect(0));
+            HapticsIntensity = 0;
     }
 
     private void TriggerPressed(object _sender, ControllerInteractionEventArgs _e)
@@ -102,15 +112,11 @@ public class EasterEgg : MonoBehaviour
             Debug.LogFormat("<color=green>Clicked within time limit : {0}</color>", m_clickCount);
             if (m_clickCount == ClickThreshold - 1)
             {
-                Debug.LogFormat("<color=green>Clicked the threshold #</color>");
                 m_active = !m_active;
+                Debug.LogFormat("<color=green>Clicked the threshold # active={0}</color>", m_active);
                 m_controllerReference = _e.controllerReference;
-                StartCoroutine(FadeEffect());
-                
-                // Start/stop haptics halfway through the effect fade
-                StartCoroutine(m_active
-                    ? LoopHapticEffect(BlendDuration / 2.0f)
-                    : CancelHapticEffect(BlendDuration / 2.0f));
+                StartCoroutine(Fade());
+                m_effectRoutine = StartCoroutine(Effect());
             }
         }
         else
@@ -125,21 +131,26 @@ public class EasterEgg : MonoBehaviour
 
     #region Shader Effect
 
-    private IEnumerator FadeEffect()
+    private IEnumerator Fade()
     {
         bool startState = m_active;
         float start = Time.time;
-        while (Time.time < start + BlendDuration && m_active == startState)
+        while (Time.time < start + FadeDuration && m_active == startState)
         {
-            float amount = (Time.time - start) / BlendDuration;
-            ApplyEffect((m_active ? amount : 1 - amount) * EffectMax);
+            EffectIntensity = (Time.time - start) / FadeDuration;
+            EffectIntensity = (m_active ? EffectIntensity : 1 - EffectIntensity);
             yield return 1;
         }
+
         if (m_active == startState)
-            ApplyEffect(m_active ? 1 : 0 * EffectMax);
+        {
+            EffectIntensity = m_active ? 1 : 0;
+            if (!m_active)
+                StopCoroutine(m_effectRoutine);
+        }        
     }
 
-    private void ApplyEffect(float _amount)
+    private void ApplyShaderEffect(float _amount)
     {
         m_renderers.ForEach(_r =>
         {
@@ -154,20 +165,25 @@ public class EasterEgg : MonoBehaviour
 
     #region Haptic Effect
 
-    private IEnumerator LoopHapticEffect(float _delay)
+    private IEnumerator Effect()
     {
-        yield return new WaitForSeconds(_delay);
-        while (m_active && m_interactableObject.IsGrabbed())
+        while (true)
         {
-            VRTK_ControllerHaptics.TriggerHapticPulse(m_controllerReference, HapticClip);
-            yield return new WaitForSeconds(HapticClip.length);
+            // Oscillation
+            float oscillation = Mathf.Sin(Time.time / OscillatePeriod / 2 * Mathf.PI) / 2.0f + 0.5f;
+            OscillationResult = Mathf.Lerp(OscillateMinStrength, OscillateMaxStrength, oscillation);
+            
+            // Haptics
+            HapticsIntensity = EffectIntensity * OscillationResult;
+            if (m_interactableObject.IsGrabbed())
+                VRTK_ControllerHaptics.TriggerHapticPulse(VRTK_DeviceFinder.GetControllerReferenceRightHand(), HapticsIntensity, UpdateInterval, PulseInterval);
+            else
+                VRTK_ControllerHaptics.CancelHapticPulse(VRTK_DeviceFinder.GetControllerReferenceRightHand());
+                
+            // Visuals
+            ApplyShaderEffect(Mathf.Lerp(0.5f, 1, oscillation) * EffectIntensity);
+            yield return new WaitForSeconds(UpdateInterval);
         }
-    }
-
-    private IEnumerator CancelHapticEffect(float _delay)
-    {
-        yield return new WaitForSeconds(_delay);
-        VRTK_ControllerHaptics.CancelHapticPulse(m_controllerReference);
     }
 
     #endregion

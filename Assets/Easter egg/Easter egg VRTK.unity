@@ -2266,7 +2266,7 @@ GameObject:
   m_Icon: {fileID: 0}
   m_NavMeshLayer: 0
   m_StaticEditorFlags: 0
-  m_IsActive: 1
+  m_IsActive: 0
 --- !u!114 &84157237
 MonoBehaviour:
   m_ObjectHideFlags: 0
@@ -41560,11 +41560,17 @@ MonoBehaviour:
   m_Name: 
   m_EditorClassIdentifier: 
   Target: {fileID: 1262296859}
-  EffectBlend: {fileID: 4800000, guid: 8e0c85741df4c8c4baa91dc0795de6b3, type: 3}
+  FadeDuration: 2
+  EffectIntensity: 0
+  EffectShader: {fileID: 4800000, guid: 8e0c85741df4c8c4baa91dc0795de6b3, type: 3}
   EffectParameters: {fileID: 2100000, guid: c2ebdab00440338459fb7190811ce497, type: 2}
-  EffectMax: 1
-  BlendDuration: 2
-  HapticClip: {fileID: 8300000, guid: 038897ec14e175d4d8fee7c5e6097dac, type: 3}
+  HapticsIntensity: 1
+  OscilationResult: 0
+  OscilateMinStrength: 0.07
+  OscilateMaxStrength: 0.25
+  OscilatePeriod: 0.5
+  UpdateInterval: 0.05
+  PulseInterval: 0.01
 --- !u!114 &1262296861
 MonoBehaviour:
   m_ObjectHideFlags: 0
