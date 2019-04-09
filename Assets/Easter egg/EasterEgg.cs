@@ -29,7 +29,6 @@ public class EasterEgg : MonoBehaviour
     private bool m_active;
     private List<Renderer> m_renderers;
     private VRTK_InteractableObject m_interactableObject;
-    private VRTK_ControllerReference m_controllerReference;
     private VRTK_ControllerEvents m_controllerEvents;
     private float m_lastClick;
     private int m_clickCount;
@@ -82,7 +81,6 @@ public class EasterEgg : MonoBehaviour
         {
             if (_sender.loadedSetup == null || !_sender.loadedSetup.isValid) return;
             GameObject controllerRight = VRTK_DeviceFinder.GetControllerRightHand(true);
-            m_controllerReference = VRTK_ControllerReference.GetControllerReference(controllerRight);
             m_controllerEvents = VRTK_DeviceFinder.GetScriptAliasController(controllerRight).GetComponent<VRTK_ControllerEvents>();
             m_controllerEvents.TriggerPressed += TriggerPressed;
             m_controllerEvents.TriggerReleased += TriggerReleased;
@@ -97,7 +95,7 @@ public class EasterEgg : MonoBehaviour
     private void Grabbed(object _sender, InteractableObjectEventArgs _e)
     {
         // If player re-grabs while effect is active, start haptics immediately
-        if (m_active);
+        if (m_active)
             HapticsIntensity = 1;
     }
 
@@ -131,7 +129,6 @@ public class EasterEgg : MonoBehaviour
             {
                 m_active = !m_active;
                 Debug.LogFormat("<color=green>Clicked the threshold # active={0}</color>", m_active);
-                m_controllerReference = _e.controllerReference;
                 StartCoroutine(Fade());
                 m_effectRoutine = StartCoroutine(Effect());
             }
@@ -146,8 +143,6 @@ public class EasterEgg : MonoBehaviour
 
     private void TriggerAxisChanged(object _sender, ControllerInteractionEventArgs _e)
     {
-        ParticleSystem.MainModule main = m_confetti.main;
-        main.startSpeedMultiplier = _e.buttonPressure * 3;
         m_triggerPressure = _e.buttonPressure;
     }
 
@@ -193,8 +188,6 @@ public class EasterEgg : MonoBehaviour
 
     #endregion
 
-    #region Haptic Effect
-
     private IEnumerator Effect()
     {
         while (true)
@@ -218,9 +211,11 @@ public class EasterEgg : MonoBehaviour
             float audioMaxBoost = Mathf.Lerp(AudioMax, 2, m_triggerPressure);
             m_buzzSource.volume = Mathf.Lerp(AudioMin, audioMaxBoost, Mathf.Max(effectStrength, m_triggerPressure)) * FadeIn;
 
+            // Confetti speed
+            ParticleSystem.MainModule main = m_confetti.main;
+            main.startSpeedMultiplier = m_triggerPressure * 3;
+
             yield return new WaitForSeconds(UpdateInterval + PulseInterval);
         }
     }
-
-    #endregion
 }
