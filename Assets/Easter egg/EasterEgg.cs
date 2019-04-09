@@ -38,6 +38,7 @@ public class EasterEgg : MonoBehaviour
     private const float UpsideDownThreshold = 90;
     private Coroutine m_effectRoutine;
     private AudioSource m_buzzSource;
+    private ParticleSystem m_confetti;
     private static readonly int Blend = Shader.PropertyToID("_EffectBlend");
     private static readonly int NumberSteps = Shader.PropertyToID("_NumberSteps");
     private static readonly int TotalDepth = Shader.PropertyToID("_TotalDepth");
@@ -73,6 +74,8 @@ public class EasterEgg : MonoBehaviour
         m_buzzSource = GetComponent<AudioSource>();
         m_buzzSource.volume = 0;
 
+        m_confetti = GetComponentInChildren<ParticleSystem>();
+
         VRTK_SDKManager.instance.LoadedSetupChanged += (_sender, _args) =>
         {
             if (_sender.loadedSetup == null || !_sender.loadedSetup.isValid) return;
@@ -80,6 +83,7 @@ public class EasterEgg : MonoBehaviour
             m_controllerReference = VRTK_ControllerReference.GetControllerReference(controllerRight);
             m_controllerEvents = VRTK_DeviceFinder.GetScriptAliasController(controllerRight).GetComponent<VRTK_ControllerEvents>();
             m_controllerEvents.TriggerPressed += TriggerPressed;
+            m_controllerEvents.TriggerReleased += TriggerReleased;
         };
     }
 
@@ -105,14 +109,17 @@ public class EasterEgg : MonoBehaviour
     {
         if (!m_interactableObject.IsGrabbed()) return;
         
-        // To activate, the controller must be held upside down (no angle restriction for deactivating)
-        if (Vector3.Angle(_e.controllerReference.actual.transform.up, Vector3.up) < UpsideDownThreshold && !m_active)
+        if (m_active)
+            m_confetti.Play();
+        
+        // To (de)activate, the controller must be held upside down
+        if (Vector3.Angle(_e.controllerReference.actual.transform.up, Vector3.up) < UpsideDownThreshold)
         {
             Debug.LogFormat("<color=red>Angle {0}</color>", Vector3.Angle(_e.controllerReference.actual.transform.up, Vector3.up));
             return;
         }
         
-        // To activate click 3 times in 1.5 seconds
+        // To (de)activate click 3 times in 1.5 seconds
         if (Time.time < m_lastClick + ClickMaxDuration)
         {
             m_clickCount++;
@@ -132,6 +139,11 @@ public class EasterEgg : MonoBehaviour
             m_clickCount = 0;
         }
         m_lastClick = Time.time;
+    }
+
+    private void TriggerReleased(object _sender, ControllerInteractionEventArgs _e)
+    {
+        m_confetti.Stop();
     }
 
     #endregion
