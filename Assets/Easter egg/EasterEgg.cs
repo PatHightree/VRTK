@@ -22,6 +22,10 @@ public class EasterEgg : MonoBehaviour
     [Range(0, 1)] public float UpdateInterval = 0.05f;
     [Range(0.00001f, 0.1f)] public float PulseInterval = 0.01f;
 
+    [Header("Audio")] 
+    public float AudioMin = 0.05f;
+    public float AudioMax = 0.15f;
+    
     private bool m_active;
     private List<Renderer> m_renderers;
     private VRTK_InteractableObject m_interactableObject;
@@ -33,6 +37,7 @@ public class EasterEgg : MonoBehaviour
     private const float ClickMaxDuration = 0.5f;
     private const float UpsideDownThreshold = 90;
     private Coroutine m_effectRoutine;
+    private AudioSource m_buzzSource;
     private static readonly int Blend = Shader.PropertyToID("_EffectBlend");
     private static readonly int NumberSteps = Shader.PropertyToID("_NumberSteps");
     private static readonly int TotalDepth = Shader.PropertyToID("_TotalDepth");
@@ -65,6 +70,8 @@ public class EasterEgg : MonoBehaviour
             });
         });
 
+        m_buzzSource = GetComponent<AudioSource>();
+        m_buzzSource.volume = 0;
 
         VRTK_SDKManager.instance.LoadedSetupChanged += (_sender, _args) =>
         {
@@ -182,6 +189,10 @@ public class EasterEgg : MonoBehaviour
                 
             // Visuals
             ApplyShaderEffect(Mathf.Lerp(0.5f, 1, oscillation) * EffectIntensity);
+            
+            // Audio
+            m_buzzSource.volume = Mathf.Lerp(AudioMin, AudioMax, oscillation) * EffectIntensity;
+            
             yield return new WaitForSeconds(UpdateInterval + PulseInterval);
         }
     }
