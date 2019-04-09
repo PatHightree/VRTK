@@ -182,7 +182,7 @@ public class EasterEgg : MonoBehaviour
                 
             // Visuals
             ApplyShaderEffect(Mathf.Lerp(0.5f, 1, oscillation) * EffectIntensity);
-            yield return new WaitForSeconds(UpdateInterval);
+            yield return new WaitForSeconds(UpdateInterval + PulseInterval);
         }
     }
 
