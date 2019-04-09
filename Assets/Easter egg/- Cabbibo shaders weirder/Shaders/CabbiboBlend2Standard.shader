@@ -8,6 +8,7 @@
         _Metallic ("Metallic", Range(0,1)) = 0.0
 
 		_EffectBlend("Effect blend", Range(0,1)) = 0.5
+		_Emission("Emission", Range(0,1)) = 0.5
 
  		// This is how many steps the trace will take.
  		// Keep in mind that increasing this will increase
@@ -49,6 +50,7 @@
         fixed4 _Color;
 
 		uniform float _EffectBlend;
+		uniform float _Emission;
 		uniform int _NumberSteps;
 		uniform float _TotalDepth;
 		uniform float _NoiseSize;
@@ -168,6 +170,7 @@
             o.Albedo = lerp(c.rgb, Cabbibo(rayOrigin, rayDirection).rgb, _EffectBlend);
             o.Metallic = _Metallic;
             o.Smoothness = _Glossiness;
+            o.Emission = o.Albedo * _Emission;
             o.Alpha = c.a;
         }
         ENDCG

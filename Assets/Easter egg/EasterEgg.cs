@@ -9,7 +9,7 @@ public class EasterEgg : MonoBehaviour
     public Transform Target;
     public float FadeDuration = 2;
     [Header("Visuals")] 
-    [Range(0, 1)]public float EffectIntensity;
+    [Range(0, 1)]public float FadeIn;
     public Shader EffectShader;
     public Material EffectParameters;
 
@@ -39,7 +39,9 @@ public class EasterEgg : MonoBehaviour
     private Coroutine m_effectRoutine;
     private AudioSource m_buzzSource;
     private ParticleSystem m_confetti;
-    private static readonly int Blend = Shader.PropertyToID("_EffectBlend");
+    private float m_triggerPressure;
+    private static readonly int EffectBlend = Shader.PropertyToID("_EffectBlend");
+    private static readonly int Emission = Shader.PropertyToID("_Emission");
     private static readonly int NumberSteps = Shader.PropertyToID("_NumberSteps");
     private static readonly int TotalDepth = Shader.PropertyToID("_TotalDepth");
     private static readonly int NoiseSize = Shader.PropertyToID("_NoiseSize");
@@ -61,7 +63,7 @@ public class EasterEgg : MonoBehaviour
             _r.materials.ToList().ForEach(_m =>
             {
                 _m.shader = EffectShader;
-                _m.SetFloat(Blend, 0);
+                _m.SetFloat(EffectBlend, 0);
                 _m.SetFloat(NumberSteps, EffectParameters.GetFloat(NumberSteps));
                 _m.SetFloat(TotalDepth, EffectParameters.GetFloat(TotalDepth));
                 _m.SetFloat(NoiseSize, EffectParameters.GetFloat(NoiseSize));
@@ -84,6 +86,7 @@ public class EasterEgg : MonoBehaviour
             m_controllerEvents = VRTK_DeviceFinder.GetScriptAliasController(controllerRight).GetComponent<VRTK_ControllerEvents>();
             m_controllerEvents.TriggerPressed += TriggerPressed;
             m_controllerEvents.TriggerReleased += TriggerReleased;
+            m_controllerEvents.TriggerAxisChanged += TriggerAxisChanged; 
         };
     }
 
@@ -141,6 +144,13 @@ public class EasterEgg : MonoBehaviour
         m_lastClick = Time.time;
     }
 
+    private void TriggerAxisChanged(object _sender, ControllerInteractionEventArgs _e)
+    {
+        ParticleSystem.MainModule main = m_confetti.main;
+        main.startSpeedMultiplier = _e.buttonPressure * 3;
+        m_triggerPressure = _e.buttonPressure;
+    }
+
     private void TriggerReleased(object _sender, ControllerInteractionEventArgs _e)
     {
         m_confetti.Stop();
@@ -156,14 +166,14 @@ public class EasterEgg : MonoBehaviour
         float start = Time.time;
         while (Time.time < start + FadeDuration && m_active == startState)
         {
-            EffectIntensity = (Time.time - start) / FadeDuration;
-            EffectIntensity = (m_active ? EffectIntensity : 1 - EffectIntensity);
+            FadeIn = (Time.time - start) / FadeDuration;
+            FadeIn = (m_active ? FadeIn : 1 - FadeIn);
             yield return 1;
         }
 
         if (m_active == startState)
         {
-            EffectIntensity = m_active ? 1 : 0;
+            FadeIn = m_active ? 1 : 0;
             if (!m_active)
                 StopCoroutine(m_effectRoutine);
         }        
@@ -175,7 +185,8 @@ public class EasterEgg : MonoBehaviour
         {
             _r.materials.ToList().ForEach(_m =>
             {
-                _m.SetFloat(Blend, _amount);
+                _m.SetFloat(EffectBlend, _amount);
+                _m.SetFloat(Emission, m_triggerPressure * 0.5f);
             });
         });
     }
@@ -191,20 +202,22 @@ public class EasterEgg : MonoBehaviour
             // Oscillation
             float oscillation = Mathf.Sin(Time.time / OscillatePeriod / 2 * Mathf.PI) / 2.0f + 0.5f;
             OscillationResult = Mathf.Lerp(OscillateMinStrength, OscillateMaxStrength, oscillation);
+            float effectStrength = Mathf.Max(oscillation, m_triggerPressure); 
             
             // Haptics
-            HapticsIntensity = EffectIntensity * OscillationResult;
+            HapticsIntensity = FadeIn * effectStrength;
             if (m_interactableObject.IsGrabbed())
                 VRTK_ControllerHaptics.TriggerHapticPulse(VRTK_DeviceFinder.GetControllerReferenceRightHand(), HapticsIntensity, UpdateInterval, PulseInterval);
             else
                 VRTK_ControllerHaptics.CancelHapticPulse(VRTK_DeviceFinder.GetControllerReferenceRightHand());
                 
             // Visuals
-            ApplyShaderEffect(Mathf.Lerp(0.5f, 1, oscillation) * EffectIntensity);
+            ApplyShaderEffect(Mathf.Lerp(0.5f, 1, effectStrength) * FadeIn);
             
             // Audio
-            m_buzzSource.volume = Mathf.Lerp(AudioMin, AudioMax, oscillation) * EffectIntensity;
-            
+            float audioMaxBoost = Mathf.Lerp(AudioMax, 2, m_triggerPressure);
+            m_buzzSource.volume = Mathf.Lerp(AudioMin, audioMaxBoost, Mathf.Max(effectStrength, m_triggerPressure)) * FadeIn;
+
             yield return new WaitForSeconds(UpdateInterval + PulseInterval);
         }
     }
