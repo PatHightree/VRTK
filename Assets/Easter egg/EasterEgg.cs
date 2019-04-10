@@ -17,6 +17,7 @@ public enum EasterEggState
 
 public abstract  class EasterEgg : MonoBehaviour
 {
+    protected bool DebugLog = true;
     public EasterEggState State { get; private set; } = EasterEggState.PrerequisitesNotMet;
 
     protected Transform Target { get; private set; }
@@ -39,6 +40,10 @@ public abstract  class EasterEgg : MonoBehaviour
                 m_childPrerequisites.All(_p => Target.GetComponentInChildren(_p) != null)  
             ? EasterEggState.PrerequisitesMet
             : EasterEggState.PrerequisitesNotMet;
+        
+        if (State==EasterEggState.PrerequisitesNotMet)
+            Debug.LogWarning(this.name + ": prerequisites not met!");
+        
         return State == EasterEggState.PrerequisitesMet;
     }
     
@@ -102,7 +107,7 @@ public abstract  class EasterEgg : MonoBehaviour
 
         State = EasterEggState.TearingDown;
         DoTeardown();
-        State = EasterEggState.PrerequisitesMet;
+        CheckPrerequisites();
     }
     protected abstract void DoTeardown();
 }

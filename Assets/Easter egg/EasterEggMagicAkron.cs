@@ -26,8 +26,8 @@ public class EasterEggMagicAkron : EasterEgg
     public float HumMinVolume = 0.05f;
     public float HumMaxVolume = 0.15f;
     public AudioClip Hum;
-    public float RushMinVolume = 0.05f;
-    public float RushMaxVolume = 0.15f;
+    public float RushMinVolume = 0;
+    public float RushMaxVolume = 1;
     public AudioClip Rush;
     
     private List<Renderer> m_renderers;
@@ -43,6 +43,8 @@ public class EasterEggMagicAkron : EasterEgg
     private AudioSource m_rushSource;
     private ParticleSystem m_confetti;
     private float m_triggerPressure;
+    private float m_rushVolume = 0;
+    private float m_rushVolumeSpeed = 0;
     private static readonly int EffectBlend = Shader.PropertyToID("_EffectBlend");
     private static readonly int Emission = Shader.PropertyToID("_Emission");
     private static readonly int NumberSteps = Shader.PropertyToID("_NumberSteps");
@@ -51,12 +53,11 @@ public class EasterEggMagicAkron : EasterEgg
     private static readonly int NoiseSpeed = Shader.PropertyToID("_NoiseSpeed");
     private static readonly int HueSize = Shader.PropertyToID("_HueSize");
     private static readonly int BaseHue = Shader.PropertyToID("_BaseHue");
-
     
     private void Awake()
     {
         Create(transform, 
-            new List<Type> {typeof(VRTK_InteractableObject), typeof(AudioSource)}, 
+            new List<Type> { typeof(VRTK_InteractableObject) }, 
             new List<Type> { typeof(ParticleSystem) });
     }
 
@@ -99,7 +100,7 @@ public class EasterEggMagicAkron : EasterEgg
         m_humSource.Play();
         m_rushSource = Target.gameObject.AddComponent<AudioSource>();
         m_rushSource.clip = Rush;
-        m_rushSource.volume = 0;
+        m_rushSource.volume = m_rushVolume = 0;
         m_rushSource.loop = true;
         m_rushSource.spatialBlend = 1;
         m_rushSource.Play();
@@ -123,7 +124,7 @@ public class EasterEggMagicAkron : EasterEgg
         // To (de)activate, the controller must be held upside down
         if (Vector3.Angle(controllerReference.actual.transform.up, Vector3.up) < UpsideDownThreshold)
         {
-            Debug.LogFormat("<color=red>Angle {0}</color>", Vector3.Angle(controllerReference.actual.transform.up, Vector3.up));
+            if (DebugLog) Debug.LogFormat("<color=red>Angle {0}</color>", Vector3.Angle(controllerReference.actual.transform.up, Vector3.up));
             return false;
         }
         
@@ -131,17 +132,17 @@ public class EasterEggMagicAkron : EasterEgg
         if (Time.time < m_lastClick + ClickMaxDuration)
         {
             m_clickCount++;
-            Debug.LogFormat("<color=green>Clicked within time limit : {0}</color>", m_clickCount);
+            if (DebugLog) Debug.LogFormat("<color=green>Clicked within time limit : {0}</color>", m_clickCount);
             if (m_clickCount == ClickThreshold - 1)
             {
-                Debug.LogFormat("<color=green>Clicked the threshold # : Activating</color>");
+                if (DebugLog) Debug.LogFormat("<color=green>Clicked the threshold # : Activating</color>");
                 
                 return true;
             }
         }
         else
         {
-            Debug.LogFormat("<color=red>Clicked too late {0} > {1} + {2}</color>", Time.time, m_lastClick, ClickMaxDuration);
+            if (DebugLog) Debug.LogFormat("<color=red>Clicked too late {0} > {1} + {2}</color>", Time.time, m_lastClick, ClickMaxDuration);
             m_clickCount = 0;
         }
         
@@ -166,7 +167,8 @@ public class EasterEggMagicAkron : EasterEgg
 
     protected override void DoTeardown()
     {
-        throw new System.NotImplementedException();
+        Destroy(m_humSource);
+        Destroy(m_rushSource);
     }
 
     #region Event Handling
@@ -281,10 +283,11 @@ public class EasterEggMagicAkron : EasterEgg
             
             // Audio
             m_humSource.volume = Mathf.Lerp(HumMinVolume, HumMaxVolume, effectStrength) * FadeAmount;
-
-//            float audioMaxBoost = Mathf.Lerp(HumMaxVolume, 2, m_triggerPressure);
-            m_rushSource.volume = Mathf.Lerp(RushMinVolume, RushMaxVolume, m_triggerPressure) * FadeAmount;
-
+            
+            const float triggerTolerance = 0.1f;
+            m_rushVolume = Mathf.SmoothDamp(m_rushVolume, m_triggerPressure, ref m_rushVolumeSpeed, 0.35f); // Substract triggerTolerance because trigger is not exactly 0
+            m_rushSource.volume = (Mathf.Max(m_triggerPressure, m_rushVolume) - triggerTolerance) * FadeAmount; // Max lets the starting of sound be immediate and stopping be delayed
+            
             // Confetti speed
             ParticleSystem.MainModule main = m_confetti.main;
             main.startSpeedMultiplier = m_triggerPressure * 3;
