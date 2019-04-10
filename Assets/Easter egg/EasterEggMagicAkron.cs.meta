@@ -1,0 +1,13 @@
+fileFormatVersion: 2
+guid: a03e7af32cc96a340a70016d542b60e4
+MonoImporter:
+  externalObjects: {}
+  serializedVersion: 2
+  defaultReferences:
+  - EffectShader: {instanceID: 0}
+  - EffectParameters: {instanceID: 0}
+  executionOrder: 0
+  icon: {instanceID: 0}
+  userData: 
+  assetBundleName: 
+  assetBundleVariant: 
