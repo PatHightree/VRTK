@@ -122,7 +122,9 @@ public class EasterEggMagicAkron : EasterEgg
         if (!m_interactableObject.IsGrabbed()) return false;
         
         // To (de)activate, the controller must be held upside down
-        if (Vector3.Angle(controllerReference.actual.transform.up, Vector3.up) < UpsideDownThreshold)
+        Vector3 modelUp = controllerReference.actual.transform.TransformPoint(new Vector3(0, 1, 1));
+        Debug.DrawLine(controllerReference.actual.transform.position, modelUp, Color.green);
+        if (Vector3.Angle(modelUp, Vector3.up) < UpsideDownThreshold)
         {
             if (DebugLog) Debug.LogFormat("<color=red>Angle {0}</color>", Vector3.Angle(controllerReference.actual.transform.up, Vector3.up));
             return false;
@@ -279,7 +281,7 @@ public class EasterEggMagicAkron : EasterEgg
                 VRTK_ControllerHaptics.CancelHapticPulse(VRTK_DeviceFinder.GetControllerReferenceRightHand());
                 
             // Visuals
-            ApplyShaderEffect(Mathf.Lerp(0.5f, 1, effectStrength) * FadeAmount);
+            ApplyShaderEffect(Mathf.Lerp(0.25f, 1, effectStrength) * FadeAmount);
             
             // Audio
             m_humSource.volume = Mathf.Lerp(HumMinVolume, HumMaxVolume, effectStrength) * FadeAmount;
