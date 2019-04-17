@@ -3,6 +3,16 @@ using System.Collections.Generic;
 using System.Linq;
 using UnityEngine;
 
+// EasterEgg State Transitions :
+// 
+//         +------> PrerequisitesNotMet
+//         |
+//    Init +------> PrerequisitesMet +-----> SettingUp +-----> SetUp +----------> Activating +---> Active
+//                         ^                                    + ^                                  +
+//                         |                                    | |                                  |
+//                         |                                    | |                                  |
+//                         +-------------+ TearingDown <--------+ +------------+ Deactivating <------+
+
 public enum EasterEggState
 {
     PrerequisitesNotMet,
@@ -17,14 +27,24 @@ public enum EasterEggState
 
 public abstract  class EasterEgg : MonoBehaviour
 {
-    protected bool DebugLog = false;
-    public EasterEggState State { get; private set; } = EasterEggState.PrerequisitesNotMet;
-
     protected GameObject Target { get; private set; }
+    protected bool DebugLog = false;
+
+    public EasterEggState State
+    {
+        get => m_state;
+        private set
+        {
+            m_state = value;
+            if (DebugLog) Debug.Log("<color=magenta>State = " + State + "</color>");
+        }
+    }
+    private EasterEggState m_state;
     
+    #region Setup
 
     protected abstract void GetPrerequisites(out List<Type> _targetPrerequisites, out List<Type> _childPrerequisites);
-    
+
     private bool CheckPrerequisites()
     {
         GetPrerequisites(out var targetPrerequisites, out var childPrerequisites);
@@ -35,21 +55,28 @@ public abstract  class EasterEgg : MonoBehaviour
         
         if (State==EasterEggState.PrerequisitesNotMet)
             Debug.LogWarningFormat("<color=red>Easter egg {0}: prerequisites not met!</color>", name);
-        
         return State == EasterEggState.PrerequisitesMet;
     }
     
     public void Setup(GameObject _target)
     {
         Target = _target;
-        CheckPrerequisites();
-        if (State != EasterEggState.PrerequisitesMet) return;
+        if (!CheckPrerequisites()) return;
         
         State = EasterEggState.SettingUp;
-        DoSetup();
+        DoSetup(SetupFinished);
+    }
+    
+    protected abstract void DoSetup(Action _setupFinished);
+    
+    private void SetupFinished()
+    {
         State = EasterEggState.SetUp;
     }
-    protected abstract void DoSetup();
+
+    #endregion
+
+    #region Activate
 
     protected void CheckActivationTrigger(object _sender)
     {
@@ -58,8 +85,28 @@ public abstract  class EasterEgg : MonoBehaviour
         
         Activate();
     }
+    
     protected abstract bool DoCheckActivationTrigger(object _sender);
     
+    public void Activate()
+    {
+        if (State != EasterEggState.SetUp) return;
+        
+        State = EasterEggState.Activating;
+        DoActivate(ActivateFinished);
+    }
+    
+    protected abstract void DoActivate(Action _activateFinished);
+    
+    private void ActivateFinished()
+    {
+        State = EasterEggState.Active;
+    }
+
+    #endregion
+
+    #region Deactivate
+
     protected void CheckDeactivationTrigger(object _sender)
     {
         if (State != EasterEggState.Active) return;
@@ -67,41 +114,41 @@ public abstract  class EasterEgg : MonoBehaviour
         
         Deactivate();
     }
-    protected abstract bool DoCheckDeactivationTrigger(object _sender);
     
-    public void Activate()
-    {
-        if (State != EasterEggState.SetUp) return;
-        
-        State = EasterEggState.Activating;
-        DoActivate();
-    }
-    protected abstract void DoActivate();
-    protected void DoActivateFinished()
-    {
-        State = EasterEggState.Active;
-    }
+    protected abstract bool DoCheckDeactivationTrigger(object _sender);
 
     public void Deactivate()
     {
         if (State != EasterEggState.Active) return;
         
         State = EasterEggState.Deactivating;
-        DoDeactivate();
+        DoDeactivate(DeactivateFinished);
     }
-    protected abstract void DoDeactivate();
-    protected void DoDeactivateFinished()
+    
+    protected abstract void DoDeactivate(Action _deactivateFinished);
+    
+    private void DeactivateFinished()
     {
         State = EasterEggState.SetUp;
     }
 
-    public void Teardown()
-    {
-        if (State != EasterEggState.SetUp) return;
+    #endregion
 
+    #region Teardown
+
+    public void Teardown(Action _finished)
+    {
         State = EasterEggState.TearingDown;
-        DoTeardown();
-        CheckPrerequisites();
+        DoTeardown(() => TeardownFinished(_finished));
     }
-    protected abstract void DoTeardown();
+    
+    protected abstract void DoTeardown(Action _teardownFinished);
+    
+    private void TeardownFinished(Action _finished)
+    {
+        CheckPrerequisites();
+        _finished?.Invoke();
+    }
+
+    #endregion
 }

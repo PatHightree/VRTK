@@ -36,6 +36,7 @@ public class EasterEggMagicAkron : EasterEgg
 
     private ParticleSystem m_originalParticleSystem;
     private List<Renderer> m_renderers;
+    private Dictionary<Material, Shader> m_prevShaders;
     private List<Component> m_components;
     private VRTK_InteractableObject m_interactableObject;
     private VRTK_ControllerEvents m_controllerEvents;
@@ -49,8 +50,8 @@ public class EasterEggMagicAkron : EasterEgg
     private AudioSource m_rushSource;
     private ParticleSystem m_confetti;
     private float m_triggerPressure;
-    private float m_rushVolume = 0;
-    private float m_rushVolumeSpeed = 0;
+    private float m_rushVolume;
+    private float m_rushVolumeSpeed;
     private static readonly int EffectBlend = Shader.PropertyToID("_EffectBlend");
     private static readonly int Emission = Shader.PropertyToID("_Emission");
     private static readonly int NumberSteps = Shader.PropertyToID("_NumberSteps");
@@ -60,18 +61,19 @@ public class EasterEggMagicAkron : EasterEgg
     private static readonly int HueSize = Shader.PropertyToID("_HueSize");
     private static readonly int BaseHue = Shader.PropertyToID("_BaseHue");
 
+    #region Overrides
+
     protected override void GetPrerequisites(out List<Type> _targetPrerequisites, out List<Type> _childPrerequisites)
     {
         _targetPrerequisites = new List<Type>();
         _childPrerequisites = new List<Type> { typeof(ParticleSystem) };
     }
 
-    protected override void DoSetup()
+    protected override void DoSetup(Action _setupFinished)
     {
         // Switch off original particle system
         m_originalParticleSystem = Target.GetComponentInChildren<ParticleSystem>();
-        ParticleSystem.EmissionModule emission = m_originalParticleSystem.emission;
-        emission.enabled = false;
+        m_originalParticleSystem.gameObject.SetActive(false);
 
         // Prepare egg components
         m_confetti = gameObject.GetComponentInChildren<ParticleSystem>();
@@ -89,12 +91,18 @@ public class EasterEggMagicAkron : EasterEgg
         m_rushSource.Play();
 
         // Prepare components in Target
+        m_prevShaders = new Dictionary<Material, Shader>();
         m_renderers = Target.GetComponentsInChildren<Renderer>().ToList();
         m_renderers.ForEach(_r =>
         {
             _r.materials.ToList().ForEach(_m =>
             {
+                // Don't change the confetti particles' material
                 if (_r.gameObject == m_confetti.gameObject) return;
+                // Store original shaders before changing them
+                if (!m_prevShaders.ContainsKey(_m))
+                    m_prevShaders.Add(_m, _m.shader);
+                // Change shaders to effect shader and set their params
                 _m.shader = EffectShader;
                 _m.SetFloat(EffectBlend, 0);
                 _m.SetFloat(NumberSteps, EffectParameters.GetFloat(NumberSteps));
@@ -105,20 +113,32 @@ public class EasterEggMagicAkron : EasterEgg
                 _m.SetFloat(BaseHue, EffectParameters.GetFloat(BaseHue));
             });
         });
+
+        // Install VRTK callbacks
         m_interactableObject = Target.GetComponent<VRTK_InteractableObject>();
         m_interactableObject.InteractableObjectGrabbed += Grabbed;
         m_interactableObject.InteractableObjectUngrabbed += Ungrabbed;
-
-        // Install VRTK callbacks
         VRTK_SDKManager.instance.LoadedSetupChanged += (_sender, _args) =>
         {
             if (_sender.loadedSetup == null || !_sender.loadedSetup.isValid) return;
             GameObject controllerRight = VRTK_DeviceFinder.GetControllerRightHand(true);
             m_controllerEvents = VRTK_DeviceFinder.GetScriptAliasController(controllerRight).GetComponent<VRTK_ControllerEvents>();
-            m_controllerEvents.TriggerPressed += TriggerPressed;
-            m_controllerEvents.TriggerReleased += TriggerReleased;
+            if (VRTK_DeviceFinder.GetHeadsetType() == SDK_BaseHeadset.HeadsetType.HTCVive)
+            {
+                // For Vive Wands, clicking works better
+                m_controllerEvents.TriggerClicked += TriggerClicked;
+                m_controllerEvents.TriggerUnclicked += TriggerUnclicked;
+            }
+            else
+            {
+                // For Oculus Touch, pressing passed 50% works better
+                m_controllerEvents.TriggerPressed += TriggerPressed;
+                m_controllerEvents.TriggerReleased += TriggerReleased;
+            }
             m_controllerEvents.TriggerAxisChanged += TriggerAxisChanged; 
         };
+        
+        _setupFinished?.Invoke();
     }
 
     protected override bool DoCheckActivationTrigger(object _sender)
@@ -162,21 +182,48 @@ public class EasterEggMagicAkron : EasterEgg
         return DoCheckActivationTrigger(_sender);
     }
 
-    protected override void DoActivate()
+    protected override void DoActivate(Action _activateFinished)
     {
-        StartCoroutine(FadeIn());
+        StartCoroutine(FadeIn(_activateFinished));
     }
 
-    protected override void DoDeactivate()
+    protected override void DoDeactivate(Action _deactivateFinished)
     {
-        StartCoroutine(FadeOut());
+        StartCoroutine(FadeOut(_deactivateFinished));
     }
 
-    protected override void DoTeardown()
+    protected override void DoTeardown(Action _teardownFinished)
     {
-        Object.Destroy(m_humSource);
-        Object.Destroy(m_rushSource);
+        // Re-enable original particle system
+        m_originalParticleSystem.gameObject.SetActive(true);
+        
+        // Remove added sound sources
+        Destroy(m_humSource);
+        Destroy(m_rushSource);
+        
+        // Detach VRTK callbacks 
+        m_interactableObject.InteractableObjectGrabbed -= Grabbed;
+        m_interactableObject.InteractableObjectUngrabbed -= Ungrabbed;
+        if (VRTK_DeviceFinder.GetHeadsetType() == SDK_BaseHeadset.HeadsetType.HTCVive)
+        {
+            m_controllerEvents.TriggerClicked -= TriggerClicked;
+            m_controllerEvents.TriggerUnclicked -= TriggerUnclicked;
+        }
+        else
+        {
+            m_controllerEvents.TriggerPressed -= TriggerPressed;
+            m_controllerEvents.TriggerReleased -= TriggerReleased;
+        }
+        m_controllerEvents.TriggerAxisChanged -= TriggerAxisChanged; 
+
+        // Restore original shaders
+        foreach (var prevShader in m_prevShaders)
+            prevShader.Key.shader = prevShader.Value;
+
+        _teardownFinished?.Invoke();
     }
+
+    #endregion
 
     #region Event Handling
     
@@ -213,11 +260,21 @@ public class EasterEggMagicAkron : EasterEgg
         m_confetti.Stop();
     }
 
+    private void TriggerClicked(object _sender, ControllerInteractionEventArgs _e)
+    {
+        TriggerPressed(_sender, _e);
+    }
+
+    private void TriggerUnclicked(object _sender, ControllerInteractionEventArgs _e)
+    {
+        TriggerReleased(_sender, _e);
+    }
+
     #endregion
 
     #region Shader Effect
 
-    private IEnumerator FadeIn()
+    private IEnumerator FadeIn(Action _activateFinished)
     {
         // Start effect coroutine
         FadeAmount = 0;
@@ -233,10 +290,10 @@ public class EasterEggMagicAkron : EasterEgg
         FadeAmount = 1;
         
         // Signal that activation is complete
-        DoActivateFinished();
+        _activateFinished?.Invoke();
     }
 
-    private IEnumerator FadeOut()
+    private IEnumerator FadeOut(Action _deactivateFinished)
     {
         // Animate FadeAmount
         float start = Time.time;
@@ -252,7 +309,7 @@ public class EasterEggMagicAkron : EasterEgg
         StopCoroutine(m_effectRoutine);
         
         // Signal that deactivation is complete
-        DoDeactivateFinished();
+        _deactivateFinished?.Invoke();
     }
 
     private void ApplyShaderEffect(float _amount)
@@ -266,8 +323,6 @@ public class EasterEggMagicAkron : EasterEgg
             });
         });
     }
-
-    #endregion
 
     private IEnumerator Effect()
     {
@@ -302,4 +357,6 @@ public class EasterEggMagicAkron : EasterEgg
             yield return new WaitForSeconds(UpdateInterval + PulseInterval);
         }
     }
+
+    #endregion
 }
