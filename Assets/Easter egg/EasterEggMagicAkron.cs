@@ -2,8 +2,14 @@
 using System.Collections;
 using System.Collections.Generic;
 using System.Linq;
+using System.Numerics;
 using UnityEngine;
 using VRTK;
+using VRTK.GrabAttachMechanics;
+using VRTK.SecondaryControllerGrabActions;
+using Object = UnityEngine.Object;
+using Quaternion = UnityEngine.Quaternion;
+using Vector3 = UnityEngine.Vector3;
 
 public class EasterEggMagicAkron : EasterEgg
 {
@@ -26,11 +32,11 @@ public class EasterEggMagicAkron : EasterEgg
     public float HumMinVolume = 0.05f;
     public float HumMaxVolume = 0.15f;
     public AudioClip Hum;
-    public float RushMinVolume = 0;
-    public float RushMaxVolume = 1;
     public AudioClip Rush;
-    
+
+    private ParticleSystem m_originalParticleSystem;
     private List<Renderer> m_renderers;
+    private List<Component> m_components;
     private VRTK_InteractableObject m_interactableObject;
     private VRTK_ControllerEvents m_controllerEvents;
     private float m_lastClick;
@@ -53,34 +59,42 @@ public class EasterEggMagicAkron : EasterEgg
     private static readonly int NoiseSpeed = Shader.PropertyToID("_NoiseSpeed");
     private static readonly int HueSize = Shader.PropertyToID("_HueSize");
     private static readonly int BaseHue = Shader.PropertyToID("_BaseHue");
-    
-    private void Awake()
+
+    protected override void GetPrerequisites(out List<Type> _targetPrerequisites, out List<Type> _childPrerequisites)
     {
-        Create(transform, 
-            new List<Type> { typeof(VRTK_InteractableObject) }, 
-            new List<Type> { typeof(ParticleSystem) });
+        _targetPrerequisites = new List<Type>();
+        _childPrerequisites = new List<Type> { typeof(ParticleSystem) };
     }
 
-    private void Start()
-    {
-        Setup();
-    }
-    
     protected override void DoSetup()
     {
-        m_interactableObject = Target.GetComponentInChildren<VRTK_InteractableObject>();
-        m_interactableObject.InteractableObjectGrabbed += Grabbed;
-        m_interactableObject.InteractableObjectUngrabbed += Ungrabbed;
-        
-        m_confetti = Target.GetComponentInChildren<ParticleSystem>();
+        // Switch off original particle system
+        m_originalParticleSystem = Target.GetComponentInChildren<ParticleSystem>();
+        ParticleSystem.EmissionModule emission = m_originalParticleSystem.emission;
+        emission.enabled = false;
 
+        // Prepare egg components
+        m_confetti = gameObject.GetComponentInChildren<ParticleSystem>();
+        m_humSource = gameObject.AddComponent<AudioSource>();
+        m_humSource.clip = Hum;
+        m_humSource.volume = 0;
+        m_humSource.loop = true;
+        m_humSource.spatialBlend = 1;
+        m_humSource.Play();
+        m_rushSource = gameObject.AddComponent<AudioSource>();
+        m_rushSource.clip = Rush;
+        m_rushSource.volume = m_rushVolume = 0;
+        m_rushSource.loop = true;
+        m_rushSource.spatialBlend = 1;
+        m_rushSource.Play();
+
+        // Prepare components in Target
         m_renderers = Target.GetComponentsInChildren<Renderer>().ToList();
         m_renderers.ForEach(_r =>
         {
-            if (_r.gameObject == m_confetti.gameObject) return;
-            
             _r.materials.ToList().ForEach(_m =>
             {
+                if (_r.gameObject == m_confetti.gameObject) return;
                 _m.shader = EffectShader;
                 _m.SetFloat(EffectBlend, 0);
                 _m.SetFloat(NumberSteps, EffectParameters.GetFloat(NumberSteps));
@@ -91,20 +105,11 @@ public class EasterEggMagicAkron : EasterEgg
                 _m.SetFloat(BaseHue, EffectParameters.GetFloat(BaseHue));
             });
         });
+        m_interactableObject = Target.GetComponent<VRTK_InteractableObject>();
+        m_interactableObject.InteractableObjectGrabbed += Grabbed;
+        m_interactableObject.InteractableObjectUngrabbed += Ungrabbed;
 
-        m_humSource = Target.gameObject.AddComponent<AudioSource>();
-        m_humSource.clip = Hum;
-        m_humSource.volume = 0;
-        m_humSource.loop = true;
-        m_humSource.spatialBlend = 1;
-        m_humSource.Play();
-        m_rushSource = Target.gameObject.AddComponent<AudioSource>();
-        m_rushSource.clip = Rush;
-        m_rushSource.volume = m_rushVolume = 0;
-        m_rushSource.loop = true;
-        m_rushSource.spatialBlend = 1;
-        m_rushSource.Play();
-
+        // Install VRTK callbacks
         VRTK_SDKManager.instance.LoadedSetupChanged += (_sender, _args) =>
         {
             if (_sender.loadedSetup == null || !_sender.loadedSetup.isValid) return;
@@ -169,8 +174,8 @@ public class EasterEggMagicAkron : EasterEgg
 
     protected override void DoTeardown()
     {
-        Destroy(m_humSource);
-        Destroy(m_rushSource);
+        Object.Destroy(m_humSource);
+        Object.Destroy(m_rushSource);
     }
 
     #region Event Handling
@@ -297,5 +302,4 @@ public class EasterEggMagicAkron : EasterEgg
             yield return new WaitForSeconds(UpdateInterval + PulseInterval);
         }
     }
-
 }

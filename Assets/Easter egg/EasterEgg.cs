@@ -17,38 +17,32 @@ public enum EasterEggState
 
 public abstract  class EasterEgg : MonoBehaviour
 {
-    protected bool DebugLog = true;
+    protected bool DebugLog = false;
     public EasterEggState State { get; private set; } = EasterEggState.PrerequisitesNotMet;
 
-    protected Transform Target { get; private set; }
+    protected GameObject Target { get; private set; }
     
-    private List<Type> m_targetPrerequisites;
-    private List<Type> m_childPrerequisites;
 
-    protected void Create(Transform _target, List<Type> _targetPrerequisites, List<Type> _childPrerequisites)
+    protected abstract void GetPrerequisites(out List<Type> _targetPrerequisites, out List<Type> _childPrerequisites);
+    
+    private bool CheckPrerequisites()
     {
-        Target = _target;
-        m_targetPrerequisites = _targetPrerequisites;
-        m_childPrerequisites = _childPrerequisites;
-        
-        CheckPrerequisites();
-    }
-
-    public bool CheckPrerequisites()
-    {
-        State = m_targetPrerequisites.All(_p => Target.GetComponent(_p) != null) && 
-                m_childPrerequisites.All(_p => Target.GetComponentInChildren(_p) != null)  
+        GetPrerequisites(out var targetPrerequisites, out var childPrerequisites);
+        State = targetPrerequisites.All(_p => Target.GetComponent(_p) != null) && 
+                childPrerequisites.All(_p => Target.GetComponentInChildren(_p) != null)  
             ? EasterEggState.PrerequisitesMet
             : EasterEggState.PrerequisitesNotMet;
         
         if (State==EasterEggState.PrerequisitesNotMet)
-            Debug.LogWarning(this.name + ": prerequisites not met!");
+            Debug.LogWarningFormat("<color=red>Easter egg {0}: prerequisites not met!</color>", name);
         
         return State == EasterEggState.PrerequisitesMet;
     }
     
-    public void Setup()
+    public void Setup(GameObject _target)
     {
+        Target = _target;
+        CheckPrerequisites();
         if (State != EasterEggState.PrerequisitesMet) return;
         
         State = EasterEggState.SettingUp;
