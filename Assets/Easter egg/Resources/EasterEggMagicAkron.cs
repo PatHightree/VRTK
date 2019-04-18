@@ -147,11 +147,14 @@ public class EasterEggMagicAkron : EasterEgg
         if (!m_interactableObject.IsGrabbed()) return false;
         
         // To (de)activate, the controller must be held upside down
-        Vector3 modelUp = controllerReference.actual.transform.TransformPoint(new Vector3(0, 1, 1));
+        Vector3 modelUp = 
+            VRTK_DeviceFinder.GetHeadsetType() == SDK_BaseHeadset.HeadsetType.HTCVive 
+            ? controllerReference.actual.transform.up
+            : controllerReference.actual.transform.TransformPoint(new Vector3(0, 1, 1));
         Debug.DrawLine(controllerReference.actual.transform.position, modelUp, Color.green);
         if (Vector3.Angle(modelUp, Vector3.up) < UpsideDownThreshold)
         {
-            if (DebugLog) Debug.LogFormat("<color=red>Angle {0}</color>", Vector3.Angle(controllerReference.actual.transform.up, Vector3.up));
+            if (DebugLog) Debug.LogFormat("<color=red>Angle {0}</color>", Vector3.Angle(modelUp, Vector3.up));
             return false;
         }
         

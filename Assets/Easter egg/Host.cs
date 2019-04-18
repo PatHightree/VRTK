@@ -14,7 +14,7 @@ public class Host : MonoBehaviour
 
         m_easterEgg = m_easterEggGO.GetComponent<EasterEgg>();
         m_easterEgg.Setup(Target);
-        m_easterEgg.Activate();
+//        m_easterEgg.Activate();
     }
 
     private void Update()
