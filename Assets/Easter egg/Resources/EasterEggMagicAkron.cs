@@ -1,4 +1,4 @@
-﻿using System;
+using System;
 using System.Collections;
 using System.Collections.Generic;
 using System.Linq;
@@ -34,11 +34,10 @@ public class EasterEggMagicAkron : EasterEgg
     public AudioClip Hum;
     public AudioClip Rush;
 
-    private ParticleSystem m_originalParticleSystem;
-    private List<Renderer> m_renderers;
+    private List<ParticleSystem> m_originalParticleSystems;
+    private List<MeshRenderer> m_renderers;
     private Dictionary<Material, Shader> m_prevShaders;
     private List<Component> m_components;
-    private VRTK_InteractableObject m_interactableObject;
     private VRTK_ControllerEvents m_controllerEvents;
     private float m_lastClick;
     private int m_clickCount;
@@ -71,10 +70,6 @@ public class EasterEggMagicAkron : EasterEgg
 
     protected override void DoSetup(Action _setupFinished)
     {
-        // Switch off original particle system
-        m_originalParticleSystem = Target.GetComponentInChildren<ParticleSystem>();
-        m_originalParticleSystem.gameObject.SetActive(false);
-
         // Prepare egg components
         m_confetti = gameObject.GetComponentInChildren<ParticleSystem>();
         m_humSource = gameObject.AddComponent<AudioSource>();
@@ -90,9 +85,14 @@ public class EasterEggMagicAkron : EasterEgg
         m_rushSource.spatialBlend = 1;
         m_rushSource.Play();
 
+        // Switch off original particle system
+        m_originalParticleSystems = Target.GetComponentsInChildren<ParticleSystem>().ToList();
+        m_originalParticleSystems.Remove(m_confetti);
+        m_originalParticleSystems.ForEach(ps => ps.gameObject.SetActive(false));
+
         // Prepare components in Target
         m_prevShaders = new Dictionary<Material, Shader>();
-        m_renderers = Target.GetComponentsInChildren<Renderer>().ToList();
+        m_renderers = Target.GetComponentsInChildren<MeshRenderer>().ToList();
         m_renderers.ForEach(_r =>
         {
             _r.materials.ToList().ForEach(_m =>
@@ -105,38 +105,32 @@ public class EasterEggMagicAkron : EasterEgg
                 // Change shaders to effect shader and set their params
                 _m.shader = EffectShader;
                 _m.SetFloat(EffectBlend, 0);
-                _m.SetFloat(NumberSteps, EffectParameters.GetFloat(NumberSteps));
-                _m.SetFloat(TotalDepth, EffectParameters.GetFloat(TotalDepth));
-                _m.SetFloat(NoiseSize, EffectParameters.GetFloat(NoiseSize));
-                _m.SetFloat(NoiseSpeed, EffectParameters.GetFloat(NoiseSpeed));
-                _m.SetFloat(HueSize, EffectParameters.GetFloat(HueSize));
-                _m.SetFloat(BaseHue, EffectParameters.GetFloat(BaseHue));
             });
         });
 
         // Install VRTK callbacks
-        m_interactableObject = Target.GetComponent<VRTK_InteractableObject>();
-        m_interactableObject.InteractableObjectGrabbed += Grabbed;
-        m_interactableObject.InteractableObjectUngrabbed += Ungrabbed;
         VRTK_SDKManager.instance.LoadedSetupChanged += (_sender, _args) =>
         {
-            if (_sender.loadedSetup == null || !_sender.loadedSetup.isValid) return;
-            GameObject controllerRight = VRTK_DeviceFinder.GetControllerRightHand(true);
-            m_controllerEvents = VRTK_DeviceFinder.GetScriptAliasController(controllerRight).GetComponent<VRTK_ControllerEvents>();
-            if (VRTK_DeviceFinder.GetHeadsetType() == SDK_BaseHeadset.HeadsetType.HTCVive)
-            {
-                // For Vive Wands, clicking works better
-                m_controllerEvents.TriggerClicked += TriggerClicked;
-                m_controllerEvents.TriggerUnclicked += TriggerUnclicked;
-            }
-            else
-            {
-                // For Oculus Touch, pressing passed 50% works better
-                m_controllerEvents.TriggerPressed += TriggerPressed;
-                m_controllerEvents.TriggerReleased += TriggerReleased;
-            }
-            m_controllerEvents.TriggerAxisChanged += TriggerAxisChanged; 
+            if (!_sender.loadedSetup.isValid)
+                Teardown(null);
         };
+        GameObject controllerRight = VRTK_DeviceFinder.GetControllerRightHand(true);
+        m_controllerEvents = VRTK_DeviceFinder.GetScriptAliasController(controllerRight).GetComponent<VRTK_ControllerEvents>();
+        if (VRTK_DeviceFinder.GetHeadsetType() == SDK_BaseHeadset.HeadsetType.HTCVive)
+        {
+            // For Vive Wands, clicking works better
+            m_controllerEvents.TriggerClicked += CheckActivationChange;
+            m_controllerEvents.TriggerUnclicked += TriggerReleased;
+        }
+        else
+        {
+            // For Oculus Touch, pressing passed 50% works better
+            m_controllerEvents.TriggerPressed += CheckActivationChange;
+            m_controllerEvents.TriggerReleased += TriggerReleased;
+        }
+        m_controllerEvents.TriggerAxisChanged += TriggerAxisChanged; 
+
+        HapticsIntensity = 1;
         
         _setupFinished?.Invoke();
     }
@@ -144,14 +138,9 @@ public class EasterEggMagicAkron : EasterEgg
     protected override bool DoCheckActivationTrigger(object _sender)
     {
         if (!(_sender is VRTK_ControllerReference controllerReference)) return false;
-        if (!m_interactableObject.IsGrabbed()) return false;
         
         // To (de)activate, the controller must be held upside down
-        Vector3 modelUp = 
-            VRTK_DeviceFinder.GetHeadsetType() == SDK_BaseHeadset.HeadsetType.HTCVive 
-            ? controllerReference.actual.transform.up
-            : controllerReference.actual.transform.TransformPoint(new Vector3(0, 1, 1));
-        Debug.DrawLine(controllerReference.actual.transform.position, modelUp, Color.green);
+        Vector3 modelUp = Target.transform.up;
         if (Vector3.Angle(modelUp, Vector3.up) < UpsideDownThreshold)
         {
             if (DebugLog) Debug.LogFormat("<color=red>Angle {0}</color>", Vector3.Angle(modelUp, Vector3.up));
@@ -198,23 +187,21 @@ public class EasterEggMagicAkron : EasterEgg
     protected override void DoTeardown(Action _teardownFinished)
     {
         // Re-enable original particle system
-        m_originalParticleSystem.gameObject.SetActive(true);
+        m_originalParticleSystems.ForEach((ps => ps.gameObject.SetActive(true)));
         
         // Remove added sound sources
         Destroy(m_humSource);
         Destroy(m_rushSource);
         
         // Detach VRTK callbacks 
-        m_interactableObject.InteractableObjectGrabbed -= Grabbed;
-        m_interactableObject.InteractableObjectUngrabbed -= Ungrabbed;
         if (VRTK_DeviceFinder.GetHeadsetType() == SDK_BaseHeadset.HeadsetType.HTCVive)
         {
-            m_controllerEvents.TriggerClicked -= TriggerClicked;
-            m_controllerEvents.TriggerUnclicked -= TriggerUnclicked;
+            m_controllerEvents.TriggerClicked -= CheckActivationChange;
+            m_controllerEvents.TriggerUnclicked -= TriggerReleased;
         }
         else
         {
-            m_controllerEvents.TriggerPressed -= TriggerPressed;
+            m_controllerEvents.TriggerPressed -= CheckActivationChange;
             m_controllerEvents.TriggerReleased -= TriggerReleased;
         }
         m_controllerEvents.TriggerAxisChanged -= TriggerAxisChanged; 
@@ -230,47 +217,22 @@ public class EasterEggMagicAkron : EasterEgg
 
     #region Event Handling
     
-    private void Grabbed(object _sender, InteractableObjectEventArgs _e)
-    {
-        // If player re-grabs while effect is active, start haptics immediately
-        if (State == EasterEggState.Active)
-            HapticsIntensity = 1;
-    }
-
-    private void Ungrabbed(object _sender, InteractableObjectEventArgs _e)
-    {
-        // If player lets go of the controller while effect is active, cancel haptics immediately
-        if (State == EasterEggState.Active)
-            HapticsIntensity = 0;
-    }
-
-    private void TriggerPressed(object _sender, ControllerInteractionEventArgs _e)
+    private void CheckActivationChange(object _sender, ControllerInteractionEventArgs _e)
     {
         CheckActivationTrigger(_e.controllerReference);
         CheckDeactivationTrigger(_e.controllerReference);
-        
-        if (State == EasterEggState.Active)
-            m_confetti.Play();
     }
 
     private void TriggerAxisChanged(object _sender, ControllerInteractionEventArgs _e)
     {
         m_triggerPressure = _e.buttonPressure;
+        if (State == EasterEggState.Active)
+            m_confetti.Play();
     }
 
     private void TriggerReleased(object _sender, ControllerInteractionEventArgs _e)
     {
         m_confetti.Stop();
-    }
-
-    private void TriggerClicked(object _sender, ControllerInteractionEventArgs _e)
-    {
-        TriggerPressed(_sender, _e);
-    }
-
-    private void TriggerUnclicked(object _sender, ControllerInteractionEventArgs _e)
-    {
-        TriggerReleased(_sender, _e);
     }
 
     #endregion
@@ -309,7 +271,8 @@ public class EasterEggMagicAkron : EasterEgg
         yield return 1;
         
         // Stop effect coroutine
-        StopCoroutine(m_effectRoutine);
+        if (m_effectRoutine != null)
+            StopCoroutine(m_effectRoutine);
         
         // Signal that deactivation is complete
         _deactivateFinished?.Invoke();
@@ -319,6 +282,7 @@ public class EasterEggMagicAkron : EasterEgg
     {
         m_renderers.ForEach(_r =>
         {
+            if (_r == null) return;
             _r.materials.ToList().ForEach(_m =>
             {
                 _m.SetFloat(EffectBlend, _amount);
@@ -338,10 +302,7 @@ public class EasterEggMagicAkron : EasterEgg
             
             // Haptics
             HapticsIntensity = FadeAmount * effectStrength;
-            if (m_interactableObject.IsGrabbed())
-                VRTK_ControllerHaptics.TriggerHapticPulse(VRTK_DeviceFinder.GetControllerReferenceRightHand(), HapticsIntensity, UpdateInterval, PulseInterval);
-            else
-                VRTK_ControllerHaptics.CancelHapticPulse(VRTK_DeviceFinder.GetControllerReferenceRightHand());
+            VRTK_ControllerHaptics.TriggerHapticPulse(VRTK_DeviceFinder.GetControllerReferenceRightHand(), HapticsIntensity, UpdateInterval, PulseInterval);
                 
             // Visuals
             ApplyShaderEffect(Mathf.Lerp(0.25f, 1, effectStrength) * FadeAmount);

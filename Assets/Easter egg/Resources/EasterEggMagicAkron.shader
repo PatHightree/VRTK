@@ -1,4 +1,4 @@
-﻿Shader "Custom/CabbiboBlend2Standard"
+﻿Shader "XVR/Easter Egg Magic Akron - Effect Blend"
 {
     Properties
     {
@@ -13,16 +13,16 @@
  		// This is how many steps the trace will take.
  		// Keep in mind that increasing this will increase
  		// Cost
-		_NumberSteps( "Number Steps", Int ) = 3
+		_NumberSteps( "Number Steps", Int ) = 40
 
 		// Total Depth of the trace. Deeper means more parallax
 		// but also less precision per step
 		_TotalDepth( "Total Depth", Float ) = 0.16
 
-		_NoiseSize( "Noise Size", Float ) = 10
+		_NoiseSize( "Noise Size", Float ) = .8
 		_NoiseSpeed( "Noise Speed", Float ) = .3
-		_HueSize( "Hue Size", Float ) = .3
-		_BaseHue( "Base Hue", Float ) = .3
+		_HueSize( "Hue Size", Float ) = 1
+		_BaseHue( "Base Hue", Float ) = .7
 
     }
     SubShader
