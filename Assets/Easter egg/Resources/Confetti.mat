@@ -66,6 +66,8 @@ Material:
     - _DstBlend: 0
     - _Emission: 1
     - _GlitterAmount: 1.8
+    - _GlitterIntensity: 0.2
+    - _GlitterProbability: 4
     - _GlossMapScale: 1
     - _Glossiness: 0.5
     - _GlossyReflections: 1
